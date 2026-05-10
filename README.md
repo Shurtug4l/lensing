@@ -29,7 +29,9 @@ lensing/
 │   ├── archive.py          downloader HSC public + SLACS-lite catalog
 │   ├── llm/                lens-metadata extractor (Anthropic + mock)
 │   ├── benchmarks.py       Stopwatch + compare_devices (CPU/MPS/CUDA)
-│   ├── viz/                imshow log-stretch robusto, corner & marginals
+│   ├── stats.py            chi^2/AIC/BIC, classification + calibration,
+│   │                       PSNR/SSIM, MCMC R-hat, k-fold CV, bootstrap
+│   ├── viz/                imshow log-stretch + diagnostics multi-panel
 │   └── utils/              transforms parametri (e1/e2 ↔ q,PA), bn(n)
 ├── notebooks/              dodici case-study eseguibili (vedi sotto)
 ├── scripts/                CLI (run_microlensing, run_sersic) + nbgen
@@ -154,6 +156,11 @@ weak-lensing cosmic-shear surveys, and clusters as cosmic telescopes.
 
 `docs/benchmarks.md` reports the CPU vs MPS performance numbers from
 notebook 13.
+
+`docs/validation.md` is the **validation cookbook** — for each kind of
+fit (parametric, classification, regression, image-regression,
+literature-mining) it lists the appropriate metrics, the helper that
+computes them, and what a "good" value looks like.
 
 `docs/usage.md` is the **detailed how-to-run guide** — for every
 notebook (01–18) and every script it lists the steps, the tunable

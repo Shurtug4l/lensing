@@ -37,6 +37,7 @@ from . import (
     light,
     llm,
     ml,
+    stats,
     utils,
     viz,
 )
@@ -53,6 +54,7 @@ __all__ = [
     "light",
     "llm",
     "ml",
+    "stats",
     "utils",
     "viz",
 ]

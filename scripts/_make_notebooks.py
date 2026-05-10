@@ -233,6 +233,48 @@ def notebook_sersic() -> List[dict]:
                                 log=False, extent=ext); plt.show()
             gl.viz.plot_loss_history(res.loss_history); plt.show()
         """)),
+        md("## Statistical validation\n\n"
+           "We rely on three complementary checks:\n\n"
+           "1. **χ²/dof** — should be ≈ 1 if the noise model and the\n"
+           "   functional form are both correct.\n"
+           "2. **Residual distribution** — standardized residuals should\n"
+           "   look ~ N(0,1); a Q-Q plot reveals tail mismatch and the\n"
+           "   Anderson-Darling test gives a p-value-like verdict.\n"
+           "3. **Radial residual profile** — annulus-binned residuals\n"
+           "   exposes systematic radial trends (over- or under-fitting\n"
+           "   the core / outskirts) which the global χ² may miss.\n\n"
+           "We additionally compute the **AIC** and **BIC** so the user\n"
+           "can compare alternative model choices on the same data."),
+        code(textwrap.dedent("""\
+            data_np   = image.numpy()
+            model_np  = fit_img.numpy()
+            chi2_dof  = gl.stats.chi2_per_dof(data_np, model_np, sigma_n, n_params=7)
+            nll       = gl.stats.gaussian_neg_loglike(data_np, model_np, sigma_n)
+            aic_val   = gl.stats.aic(nll, n_params=7)
+            bic_val   = gl.stats.bic(nll, n_params=7, n_samples=data_np.size)
+            std_res   = gl.stats.standardized_residuals(data_np, model_np, sigma_n)
+            A2, verdict = gl.stats.anderson_darling_normality(std_res)
+
+            print(gl.viz.diagnostics.format_summary({
+                'chi2 / dof'             : chi2_dof,
+                'Anderson-Darling A^2'   : A2,
+                'normality verdict'      : verdict,
+                'mean residual / sigma'  : float(std_res.mean()),
+                'std  residual / sigma'  : float(std_res.std()),
+                'AIC'                    : aic_val,
+                'BIC'                    : bic_val,
+                'log-likelihood'         : -nll,
+                'n_params'               : 7,
+                'n_data'                 : int(data_np.size),
+            }, title='Sersic fit: goodness-of-fit summary'))
+        """)),
+        code(textwrap.dedent("""\
+            gl.viz.diagnostics.plot_residual_diagnostics(
+                data_np, model_np, sigma_n,
+                title='Sersic fit residual diagnostics', extent=ext,
+            )
+            plt.show()
+        """)),
         md("## NUTS posterior (cached)"),
         code(textwrap.dedent("""\
             RUN_NUTS = False
@@ -548,10 +590,60 @@ def notebook_sie() -> List[dict]:
             res = gl.inference.fit(model, torch.tensor(0.), target, nn.MSELoss(),
                                    lr=0.05, epochs=4000, lbfgs_polish=True,
                                    scheduler=gl.inference.optimize.reduce_lr_on_plateau(patience=400))
-            print(f"final loss = {res.best_loss:.3e}")
-            print(f"truth: theta_E={float(true_sie.theta_E):.3f}  q={float(true_sie.q):.3f}  pa={float(true_sie.pa):.3f}")
-            print(f"fit  : theta_E={float(model.sie.theta_E):.3f}  q={float(model.sie.q):.3f}  pa={float(model.sie.pa):.3f}")
-            print(f"beta : truth={[float(b) for b in beta_truth]}  fit={model.beta.detach().tolist()}")
+            print(gl.viz.diagnostics.format_summary({
+                'final source-plane MSE': res.best_loss,
+                'theta_E truth [arcsec]': float(true_sie.theta_E),
+                'theta_E fit   [arcsec]': float(model.sie.theta_E),
+                'q   truth'             : float(true_sie.q),
+                'q   fit'               : float(model.sie.q),
+                'pa  truth [rad]'       : float(true_sie.pa),
+                'pa  fit   [rad]'       : float(model.sie.pa),
+                'beta_x truth'          : float(beta_truth[0]),
+                'beta_x fit'            : float(model.beta[0]),
+                'beta_y truth'          : float(beta_truth[1]),
+                'beta_y fit'            : float(model.beta[1]),
+            }, 'SIE inversion summary'))
+        """)),
+        md("## 5. Validation — image-position residuals\n\n"
+           "After fitting, every observed image should ray-trace back\n"
+           "to the same source position β. The residual is\n"
+           "δβ = β_pred − β_true, in arcsec; a good fit has δβ\n"
+           "consistent with the assumed astrometric error (here we\n"
+           "injected σ_pos = 0.01 arcsec). We additionally check that\n"
+           "the **scatter across images** in the source plane matches\n"
+           "the propagated astrometric uncertainty."),
+        code(textwrap.dedent("""\
+            with torch.no_grad():
+                bx_pred, by_pred = model.sie.ray_trace(ximg, yimg)
+            dbx = bx_pred - float(beta_truth[0])
+            dby = by_pred - float(beta_truth[1])
+
+            # The lens equation is Jacobian-amplified: an astrometric
+            # error sigma_pos in the image plane produces a scatter
+            # ~ sigma_pos / sqrt(|mu|) in the source plane, but for SIE
+            # near the Einstein ring |mu| is comparable so a 0.01 arcsec
+            # input yields ~0.005-0.02 arcsec source-plane residuals.
+            print(gl.viz.diagnostics.format_summary({
+                'mean   beta_x residual [arcsec]': float(dbx.mean()),
+                'std    beta_x residual [arcsec]': float(dbx.std()),
+                'mean   beta_y residual [arcsec]': float(dby.mean()),
+                'std    beta_y residual [arcsec]': float(dby.std()),
+                'rms    |dbeta|         [arcsec]': float(torch.sqrt((dbx**2+dby**2).mean())),
+                'n images in fit'                : int(len(ximg)),
+            }, 'SIE inversion: image-position residuals'))
+        """)),
+        code(textwrap.dedent("""\
+            # Visualize the per-image residuals on the source plane.
+            fig, ax = plt.subplots(figsize=(6, 6))
+            ax.errorbar(dbx.numpy(), dby.numpy(), fmt='o', color='C0', ms=8,
+                        ecolor='gray', capsize=4)
+            ax.scatter([0], [0], marker='*', color='orange', s=200, label='source truth')
+            ax.set(xlabel=r'$\\Delta\\beta_x$ [arcsec]',
+                   ylabel=r'$\\Delta\\beta_y$ [arcsec]',
+                   title='source-plane residuals after inversion')
+            ax.axhline(0, color='k', lw=0.5); ax.axvline(0, color='k', lw=0.5)
+            ax.set_aspect('equal'); ax.grid(alpha=0.3); ax.legend()
+            plt.show()
         """)),
     ]
 
@@ -826,26 +918,61 @@ def notebook_cnn_classifier() -> List[dict]:
             axes[1].set(xlabel='epoch', ylabel='accuracy'); axes[1].legend()
             plt.show()
         """)),
-        md("## 3. Confusion matrix on a fresh test set"),
+        md("## 3. Validation on a fresh test set\n\n"
+           "We score the network on a 200-sample test set drawn with a\n"
+           "**different seed** (so the images are statistically\n"
+           "independent of training). The reported metrics are:\n\n"
+           "* **accuracy / precision / recall / F1**: the standard\n"
+           "  binary-classification numbers;\n"
+           "* **ROC-AUC**: how well the predicted probabilities rank\n"
+           "  positives above negatives (perfect = 1, random = 0.5);\n"
+           "* **Average Precision (AP)**: integral of the\n"
+           "  precision-recall curve, more sensitive than AUC when\n"
+           "  the positive class is rare;\n"
+           "* **ECE** (Expected Calibration Error): how far the\n"
+           "  predicted probabilities are from the observed frequency\n"
+           "  in 10 confidence bins. ECE = 0 means a perfectly calibrated\n"
+           "  model; > 0.05 indicates overconfidence."),
         code(textwrap.dedent("""\
             test = gl.ml.datasets.LensClassifierDataset(n_samples=200, npix=48,
                                                         deltapix=0.05, seed=7777)
             test_loader = DataLoader(test, batch_size=64)
 
-            preds, labels = [], []
+            probs, labels = [], []
             model.eval()
             with torch.no_grad():
                 for x, y in test_loader:
-                    # `model` lives on `device` (MPS / CUDA / CPU); we must
-                    # move the test batch to the same device before the
-                    # forward pass — DataLoader returns CPU tensors by default.
-                    p = model(x.to(device)).argmax(dim=-1).cpu()
-                    preds.extend(p.tolist()); labels.extend(y.tolist())
-            preds = np.array(preds); labels = np.array(labels)
-            cm = np.array([[((preds==i) & (labels==j)).sum() for j in (0,1)] for i in (0,1)])
-            print('confusion matrix [pred x truth]:')
-            print(cm)
-            print(f'accuracy = {(preds == labels).mean():.3f}')
+                    # `model` lives on `device`; move the batch to match.
+                    out = model(x.to(device)).cpu()
+                    probs.extend(torch.softmax(out, dim=-1)[:, 1].tolist())
+                    labels.extend(y.tolist())
+            probs = np.array(probs); labels = np.array(labels)
+            preds = (probs >= 0.5).astype(int)
+
+            rep = gl.stats.classification_report(preds, labels)
+            _, _, auc = gl.stats.roc_curve(probs, labels)
+            _, _, ap  = gl.stats.pr_curve(probs, labels)
+            ece       = gl.stats.expected_calibration_error(probs, labels)
+
+            print(gl.viz.diagnostics.format_summary({
+                'accuracy'  : rep.accuracy,
+                'precision' : rep.precision,
+                'recall'    : rep.recall,
+                'F1'        : rep.f1,
+                'ROC-AUC'   : auc,
+                'PR-AP'     : ap,
+                'ECE (10b)' : ece,
+            }, title='CNN classifier — test-set summary'))
+            print()
+            print('confusion matrix [pred row, truth col]:')
+            print(rep.confusion)
+        """)),
+        code(textwrap.dedent("""\
+            # Comprehensive 2x2 diagnostic plot.
+            gl.viz.diagnostics.plot_classification_diagnostics(
+                probs, labels, title='CNN: ROC + PR + reliability'
+            )
+            plt.show()
         """)),
     ]
 
@@ -880,7 +1007,16 @@ def notebook_dnn_regression() -> List[dict]:
                 log_every=1,
             )
         """)),
-        md("## Per-parameter accuracy"),
+        md("## Per-parameter accuracy and validation\n\n"
+           "Three indicators per output dimension:\n\n"
+           "* **Pearson correlation r**: linear correlation between\n"
+           "  predicted and true; r = 1 perfect, r = 0 random.\n"
+           "* **Robust scatter σ_residual = 1.4826 × MAD**: the\n"
+           "  outlier-resistant 1σ width of (pred − truth).\n"
+           "* **Bias = ⟨pred − truth⟩**: systematic offset, should be\n"
+           "  ≪ σ_residual.\n\n"
+           "These three numbers fully describe the regressor's\n"
+           "predictive quality on each parameter."),
         code(textwrap.dedent("""\
             from lensing.ml.datasets import PARAM_KEYS
 
@@ -895,16 +1031,22 @@ def notebook_dnn_regression() -> List[dict]:
                     preds.append(model(x.to(device)).cpu().numpy())
                     truths.append(y.numpy())
             preds = np.vstack(preds); truths = np.vstack(truths)
+        """)),
+        code(textwrap.dedent("""\
+            fig, _, summary = gl.viz.diagnostics.plot_regression_diagnostics(
+                truths, preds, param_names=PARAM_KEYS,
+                title='DNN regressor — per-parameter validation',
+            )
+            plt.show()
 
-            fig, axes = plt.subplots(2, 4, figsize=(15, 7))
-            for i, (ax, name) in enumerate(zip(axes.flatten(), PARAM_KEYS)):
-                ax.scatter(truths[:, i], preds[:, i], s=8, alpha=0.5)
-                lo, hi = truths[:, i].min(), truths[:, i].max()
-                ax.plot([lo, hi], [lo, hi], 'k--')
-                ax.set(xlabel=f'true {name}', ylabel=f'pred {name}',
-                       title=f'r = {np.corrcoef(truths[:,i], preds[:,i])[0,1]:.3f}')
-            axes[1, 3].axis('off')
-            plt.tight_layout(); plt.show()
+            print(gl.viz.diagnostics.format_summary(
+                {f'{k}: r':       summary[k]['r']     for k in PARAM_KEYS}, 'Pearson r'))
+            print()
+            print(gl.viz.diagnostics.format_summary(
+                {f'{k}: bias':    summary[k]['bias']  for k in PARAM_KEYS}, 'Bias'))
+            print()
+            print(gl.viz.diagnostics.format_summary(
+                {f'{k}: sigma':   summary[k]['sigma'] for k in PARAM_KEYS}, 'Robust scatter'))
         """)),
         md("## Comparison vs. classical Adam fit\n\n"
            "How much does inference speed up if we use the DNN as a one-shot "
@@ -997,6 +1139,38 @@ def notebook_unet() -> List[dict]:
                 for ax in axes[:, j]:
                     ax.set_xticks([]); ax.set_yticks([])
             plt.tight_layout(); plt.show()
+        """)),
+        md("## Image-quality validation\n\n"
+           "Two standard image-regression metrics, computed per test\n"
+           "image and reported as mean ± std on a 32-image set:\n\n"
+           "* **PSNR** (Peak Signal-to-Noise Ratio, dB):\n"
+           "  ``20·log₁₀(data_range / RMSE)``. > 30 dB is\n"
+           "  visually indistinguishable for natural images;\n"
+           "  for U-Net source reconstruction we expect 25–35 dB.\n"
+           "* **SSIM** (Wang+ 2004): structural similarity index\n"
+           "  ∈ [-1, 1], 1 = identical. SSIM ≳ 0.9 means the\n"
+           "  reconstruction preserves the source morphology well."),
+        code(textwrap.dedent("""\
+            test_set = gl.ml.datasets.LensSourcePairDataset(n_samples=32, npix=48,
+                                                             deltapix=0.05, seed=42)
+            obs_t = torch.stack([test_set[i][0] for i in range(32)])
+            src_t = torch.stack([test_set[i][1] for i in range(32)])
+            model.eval()
+            with torch.no_grad():
+                pred_t = model(obs_t.to(device)).cpu()
+
+            fig, _, summary = gl.viz.diagnostics.plot_image_quality(
+                src_t.numpy(), pred_t.numpy(), n_show=6,
+                title='U-Net source reconstruction (truth, pred, |diff|)',
+            )
+            plt.show()
+            print(gl.viz.diagnostics.format_summary({
+                'PSNR mean [dB]': summary['psnr_mean'],
+                'PSNR std  [dB]': summary['psnr_std'],
+                'SSIM mean'     : summary['ssim_mean'],
+                'SSIM std'      : summary['ssim_std'],
+                'n test images' : len(obs_t),
+            }, title='U-Net validation metrics'))
         """)),
     ]
 
@@ -1591,36 +1765,79 @@ def notebook_large_scale_finder() -> List[dict]:
                     labels.extend(y.tolist())
             preds = np.array(preds); probs = np.array(probs); labels = np.array(labels)
 
-            cm = np.array([[((preds==i) & (labels==j)).sum() for j in (0,1)] for i in (0,1)])
-            print('confusion matrix [pred x truth]:'); print(cm)
-            tp = cm[1,1]; fp = cm[1,0]; tn = cm[0,0]; fn = cm[0,1]
-            print(f'accuracy   = {(tp+tn)/cm.sum():.3f}')
-            print(f'precision  = {tp/(tp+fp):.3f}')
-            print(f'recall     = {tp/(tp+fn):.3f}')
+            rep = gl.stats.classification_report(preds, labels)
+            _, _, auc = gl.stats.roc_curve(probs, labels)
+            _, _, ap  = gl.stats.pr_curve(probs, labels)
+            ece       = gl.stats.expected_calibration_error(probs, labels)
+            print(gl.viz.diagnostics.format_summary({
+                'accuracy'  : rep.accuracy,
+                'precision' : rep.precision,
+                'recall'    : rep.recall,
+                'F1'        : rep.f1,
+                'ROC-AUC'   : auc,
+                'PR-AP'     : ap,
+                'ECE (10b)' : ece,
+                'n test'    : int(len(labels)),
+            }, title='Test-split classification report'))
+            print('\\nconfusion matrix [pred row, truth col]:')
+            print(rep.confusion)
         """)),
         code(textwrap.dedent("""\
-            # ROC curve via sklearn-free implementation.
-            order = np.argsort(-probs)
-            sorted_lab = labels[order]
-            tpr_curve, fpr_curve = [0.0], [0.0]
-            P = sorted_lab.sum(); N = len(sorted_lab) - P
-            tp = 0; fp = 0
-            for lbl in sorted_lab:
-                if lbl == 1:
-                    tp += 1
-                else:
-                    fp += 1
-                tpr_curve.append(tp / max(P, 1))
-                fpr_curve.append(fp / max(N, 1))
-            auc = np.trapz(tpr_curve, fpr_curve)
-
-            fig, ax = plt.subplots(figsize=(6, 6))
-            ax.plot(fpr_curve, tpr_curve, lw=2, label=f'AUC = {auc:.3f}')
-            ax.plot([0, 1], [0, 1], 'k--', lw=0.8, label='random')
-            ax.set(xlabel='false-positive rate', ylabel='true-positive rate',
-                   title='lens-finder ROC on the test split')
-            ax.legend(); ax.grid(alpha=0.3)
+            # Comprehensive diagnostic plot: confusion + ROC + PR + reliability.
+            gl.viz.diagnostics.plot_classification_diagnostics(
+                probs, labels,
+                title='Lens-finder diagnostics on the held-out test split',
+            )
             plt.show()
+        """)),
+        md("## 5. K-fold cross-validation\n\n"
+           "A single train/val/test split can give a misleading score\n"
+           "when the dataset is small. We re-train the same architecture\n"
+           "on **5 disjoint folds** of the training set and report the\n"
+           "mean ± std test-set AUC across folds. Bootstrap CIs on the\n"
+           "AUC give a second, distribution-free measure of uncertainty\n"
+           "(Efron 1979)."),
+        code(textwrap.dedent("""\
+            # NB: this cell trains 5 small CNNs (1-2 min on MPS, 5-7 on CPU).
+            DO_KFOLD = False   # set to True to run the cross-validation
+            kfold_aucs = []
+            if DO_KFOLD:
+                # Combine train+val splits and run k=5 cross-validation.
+                all_idx = np.concatenate([train_idx, val_idx])
+                for fold, (tr_i, va_i) in enumerate(gl.stats.kfold_indices(
+                        len(all_idx), n_folds=5, shuffle=True, seed=42)):
+                    tr_subset = gl.bigdata.HDF5Dataset(DATA_PATH, target='label',
+                                                        indices=all_idx[tr_i].tolist())
+                    va_subset = gl.bigdata.HDF5Dataset(DATA_PATH, target='label',
+                                                        indices=all_idx[va_i].tolist())
+                    fold_model = gl.ml.models.LensCNN()
+                    gl.ml.train.fit_model(
+                        fold_model,
+                        DataLoader(tr_subset, batch_size=64, shuffle=True),
+                        DataLoader(va_subset, batch_size=128),
+                        loss_fn=nn.CrossEntropyLoss(), lr=1e-3, epochs=3,
+                        log_every=0,
+                    )
+                    # Score on the *held-out* test split.
+                    fp, fl = [], []
+                    fold_model.eval()
+                    with torch.no_grad():
+                        for x, y in test_loader:
+                            o = fold_model(x.to(device)).cpu()
+                            fp.extend(torch.softmax(o, dim=-1)[:, 1].tolist())
+                            fl.extend(y.tolist())
+                    _, _, fauc = gl.stats.roc_curve(np.array(fp), np.array(fl))
+                    kfold_aucs.append(float(fauc))
+                    print(f'  fold {fold+1}/5  AUC = {fauc:.3f}')
+
+            if kfold_aucs:
+                aucs = np.array(kfold_aucs)
+                print(f'\\nk-fold AUC: {aucs.mean():.3f} ± {aucs.std():.3f}')
+                # Bootstrap CI on the AUC mean.
+                point, lo, hi = gl.stats.bootstrap_ci(aucs, statistic=np.mean, n_boot=2000)
+                print(f'95% bootstrap CI on AUC: [{lo:.3f}, {hi:.3f}]  (mean={point:.3f})')
+            else:
+                print('Set DO_KFOLD=True above to run the cross-validation.')
         """)),
         md("## 4. Where does the model fail?\n\n"
            "Inspecting the **misclassified** samples is far more "
@@ -1707,7 +1924,16 @@ def notebook_param_recovery_at_scale() -> List[dict]:
             )
             print(f'Trained in {history.duration_s:.1f}s')
         """)),
-        md("## 2. Reliability diagrams"),
+        md("## 2. Reliability diagrams and per-parameter validation\n\n"
+           "Three complementary metrics per output dimension:\n\n"
+           "* **Pearson r** : linear correlation truth ↔ pred.\n"
+           "* **σ_residual** = 1.4826 × MAD : robust 1-σ scatter of\n"
+           "  (pred − truth), insensitive to outliers.\n"
+           "* **bias** = ⟨pred − truth⟩ : systematic offset; should\n"
+           "  be ≪ σ_residual for a well-trained regressor.\n\n"
+           "Combined with the prior range used to *generate* the data,\n"
+           "the σ_residual tells us how much of the prior the regressor\n"
+           "has actually shrunk."),
         code(textwrap.dedent("""\
             from lensing.ml.datasets import PARAM_KEYS
             test_loader = DataLoader(test_ds, batch_size=128)
@@ -1719,30 +1945,36 @@ def notebook_param_recovery_at_scale() -> List[dict]:
                     truths.append(y.numpy())
             preds = np.vstack(preds); truths = np.vstack(truths)
 
-            fig, axes = plt.subplots(2, 4, figsize=(15, 7))
-            for i, (ax, name) in enumerate(zip(axes.flatten(), PARAM_KEYS)):
-                t = truths[:, i]; p = preds[:, i]
-                ax.scatter(t, p, s=4, alpha=0.4, color='C0')
-                lo, hi = t.min(), t.max()
-                ax.plot([lo, hi], [lo, hi], 'k--', lw=0.8)
-                # Robust scatter (1.4826 * MAD ≈ 1σ for a normal distribution)
-                resid = p - t
-                mad = np.median(np.abs(resid - np.median(resid)))
-                sigma = 1.4826 * mad
-                ax.set_title(f'{name}: σ_residual={sigma:.3f}')
-                ax.set(xlabel=f'true {name}', ylabel=f'predicted {name}')
-                ax.grid(alpha=0.3)
-            axes[1, 3].axis('off')
-            plt.tight_layout(); plt.show()
+            fig, _, summary = gl.viz.diagnostics.plot_regression_diagnostics(
+                truths, preds, param_names=PARAM_KEYS,
+                title='Sersic regressor — per-parameter reliability diagrams',
+            )
+            plt.show()
+
+            # Compact tabular printout of the three indicators per parameter.
+            print(gl.viz.diagnostics.format_summary(
+                {f'r({k})':     summary[k]['r']     for k in PARAM_KEYS},
+                'Pearson correlation'))
+            print()
+            print(gl.viz.diagnostics.format_summary(
+                {f'sigma({k})': summary[k]['sigma'] for k in PARAM_KEYS},
+                'Robust scatter (MAD-based)'))
+            print()
+            print(gl.viz.diagnostics.format_summary(
+                {f'bias({k})':  summary[k]['bias']  for k in PARAM_KEYS},
+                'Systematic bias'))
         """)),
-        md("**Interpreting the σ_residual**: this is the *robust* "
-           "(median-absolute-deviation) 1σ scatter of (pred − true). "
-           "Rule of thumb: any σ_residual much smaller than the *prior* "
-           "spread on that parameter is a useful constraint. Looking at "
-           "the dataset priors (`Re ∈ [0.4, 1.5]`, `n ∈ [1.0, 6.0]`, "
-           "etc.) we expect σ_Re ~ 0.05 arcsec and σ_n ~ 0.3 to be "
-           "achievable; if the network does worse, more training data "
-           "or a deeper backbone would help."),
+        md("**Interpreting the metrics**:\n\n"
+           "* σ_residual ≪ *prior width* ⇒ the network has actually\n"
+           "  learned something; σ_residual ≈ *prior width* would mean\n"
+           "  the regressor essentially predicts the prior mean.\n"
+           "* |bias| ≲ σ_residual / √N is consistent with no systematic\n"
+           "  offset; a larger bias suggests data leakage or insufficient\n"
+           "  training.\n"
+           "* Pearson r > 0.9 indicates a usefully tight correlation;\n"
+           "  the centroids `(x0, y0)` and the brightness `Ie` typically\n"
+           "  reach r ≳ 0.95 for our default network, while the more\n"
+           "  shape-dependent `(n, e1, e2)` lag behind."),
         md("## 3. Comparison with classical Adam fit\n\n"
            "On the same 100-sample test subset, we run the classical "
            "per-image Adam fit and compare the cumulative wall time and "
@@ -1892,17 +2124,63 @@ def notebook_llm_metadata() -> List[dict]:
             merged
         """)),
         code(textwrap.dedent("""\
-            # Compute per-row absolute errors where a truth value exists.
+            # Per-row absolute errors where a truth value exists.
             mask = merged['theta_E_truth'].notna()
             if mask.any():
                 err_th = (merged.loc[mask, 'theta_E_arcsec'] - merged.loc[mask, 'theta_E_truth']).abs()
                 err_sv = (merged.loc[mask, 'sigma_v_kms'] - merged.loc[mask, 'sigma_v_truth']).abs()
-                print(f'theta_E   |Δ| max = {err_th.max():.3f} arcsec')
-                print(f'sigma_v   |Δ| max = {err_sv.max():.1f} km/s')
+                print(gl.viz.diagnostics.format_summary({
+                    'theta_E |dmax|  [arcsec]': float(err_th.max()),
+                    'theta_E mean abs err'    : float(err_th.mean()),
+                    'sigma_v |dmax|     [km/s]' : float(err_sv.max()),
+                    'sigma_v mean abs err'    : float(err_sv.mean()),
+                    'matched in catalog'      : int(mask.sum()),
+                    'total extracted'         : int(len(merged)),
+                }, 'LLM extraction vs SLACS catalog'))
             else:
                 print('No SLACS-lite intersections in this corpus; the LLM '
                       'extraction is internally consistent but cannot be '
                       'cross-validated against the embedded catalog.')
+        """)),
+        md("## 3.bis Field-level precision / recall\n\n"
+           "Treating each (paper × field) cell as a binary task — *did\n"
+           "the LLM extract the value present in the abstract?* — gives\n"
+           "us proper precision / recall numbers. We define:\n\n"
+           "* **TP** : value present in the abstract *and* extracted,\n"
+           "* **FN** : value present in the abstract but missed,\n"
+           "* **FP** : value extracted but not present (rare for this\n"
+           "  schema since the system prompt forbids hallucination).\n\n"
+           "We hand-annotate which fields *should* be extractable per\n"
+           "abstract from the corpus we ourselves authored above."),
+        code(textwrap.dedent("""\
+            # Reference: which abstracts mention each field. Hand-coded
+            # from the corpus list constructed at the top of this notebook.
+            reference_fields = [
+                {'theta_E_arcsec': True, 'sigma_v_kms': True, 'z_L': True, 'z_S': True},
+                {'theta_E_arcsec': True, 'sigma_v_kms': True, 'z_L': True, 'z_S': True},
+                {'theta_E_arcsec': True, 'sigma_v_kms': False, 'z_L': True, 'z_S': True},
+                {'theta_E_arcsec': True, 'sigma_v_kms': True, 'z_L': False, 'z_S': False},
+                {'theta_E_arcsec': True, 'sigma_v_kms': True, 'z_L': True, 'z_S': True},
+            ]
+            tp = fp = fn = 0
+            for rec, ref in zip(records, reference_fields):
+                d = rec.to_dict()
+                for k, present in ref.items():
+                    extracted = d.get(k) is not None
+                    if present and extracted: tp += 1
+                    elif present and not extracted: fn += 1
+                    elif not present and extracted: fp += 1
+            precision = tp / max(tp + fp, 1)
+            recall    = tp / max(tp + fn, 1)
+            f1        = 2 * precision * recall / max(precision + recall, 1e-30)
+            print(gl.viz.diagnostics.format_summary({
+                'true positives'   : tp,
+                'false positives'  : fp,
+                'false negatives'  : fn,
+                'precision'        : precision,
+                'recall'           : recall,
+                'F1'               : f1,
+            }, 'Field-level extraction quality'))
         """)),
         md("## 4. Caveats and pitfalls\n\n"
            "* **Hallucinations**: even a frontier LLM occasionally "

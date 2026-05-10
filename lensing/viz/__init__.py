@@ -1,5 +1,9 @@
 """Plotting helpers tuned for lensing data.
 
+The sub-module :mod:`lensing.viz.diagnostics` adds rich
+multi-panel figures for fit / classification / regression /
+image-regression validation.
+
 * :func:`imshow_log` — robust log-stretched image with automatic
   fall-back to a linear scale when the dynamic range is degenerate
   (zero / NaN / all-equal pixels). Avoids the ``LogNorm`` ValueError
@@ -10,6 +14,7 @@
 * :func:`corner_plot`, :func:`marginals_grid` — wrappers around the
   ``corner`` library + seaborn KDE marginals for posterior plots.
 """
+from . import diagnostics
 from .plotting import imshow_log, plot_loss_history, plot_residuals, side_by_side
 from .corner_plot import corner_plot, marginals_grid
 
@@ -20,4 +25,5 @@ __all__ = [
     "side_by_side",
     "corner_plot",
     "marginals_grid",
+    "diagnostics",
 ]

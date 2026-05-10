@@ -10,6 +10,26 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Detailed `docs/usage.md` covering every notebook (01–18) and script
   (`run_microlensing_fit.py`, `run_sersic_fit.py`, `_make_notebooks.py`).
+- **`lensing.stats` module** with goodness-of-fit (χ²/dof, AIC, BIC),
+  bootstrap CIs, residual diagnostics (Anderson-Darling normality,
+  radial residual profile), classification metrics
+  (precision/recall/F1, ROC/PR/AUC), probability calibration
+  (reliability curve, ECE), image-regression quality (PSNR, SSIM),
+  MCMC diagnostics (Gelman-Rubin R̂, effective sample size) and
+  k-fold CV index generator.
+- **`lensing.viz.diagnostics` module** with rich multi-panel figures:
+  `plot_residual_diagnostics` (4-panel), `plot_classification_diagnostics`
+  (confusion + ROC + PR + reliability), `plot_regression_diagnostics`
+  (per-parameter scatter + residual hist), `plot_image_quality`
+  (truth/pred/diff with PSNR & SSIM annotations), and
+  `format_summary` for Markdown-aligned metric tables.
+- **Validation sections** added to notebooks 02 (Sérsic), 06 (SIE
+  inversion), 10 (CNN), 11 (DNN regressor), 12 (U-Net), 16 (lens
+  finder + k-fold CV), 17 (parameter recovery), 18 (LLM extraction).
+  Each section ends with a printed summary table of metrics.
+- New `docs/validation.md` describing the validation strategy
+  end-to-end (which metric for which fit, what "good" looks like).
+- 10 new pytest smoke tests for `lensing.stats` (40/40 total).
 - **Section 0 "Conventions and units"** at the top of
   `docs/background.md` — single source of truth for the unit system
   (arcsec, Mpc, M_⊙, km/s, days), the coordinate convention, the
