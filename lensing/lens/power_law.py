@@ -37,18 +37,24 @@ from .._helpers import _as_param
 class PowerLawSpherical(nn.Module):
     r"""Axisymmetric power-law lens of slope ``n`` and Einstein radius ``theta_E``.
 
-    Convergence (in units of theta_E):
+    Convergence in dimensionless radius ``x = r / θ_E``:
 
     .. math::
-       \kappa(x) = \frac{3-n}{2}\, x^{1-n}, \qquad n \in (1, 3)
+       \kappa(x) = \frac{3-n}{2}\, x^{1-n}, \qquad n \in (1, 3),
 
-    Setting ``n = 2`` recovers the Singular Isothermal Sphere (SIS).
+    with the resulting deflection magnitude ``α(x) = x^{2-n}`` (in
+    units of θ_E) and lensing potential ``Ψ(x) = θ_E² · x^{3-n}/(3-n)``
+    (units arcsec²).
+
+    Setting ``n = 2`` recovers the Singular Isothermal Sphere (SIS),
+    ``n → 3`` approaches a point mass, ``n = 1`` is a uniform sheet
+    (``κ = 1``).
 
     Parameters
     ----------
-    theta_E : Einstein radius (arcsec)
-    n : radial slope; ``n in (1, 3)``
-    center_x, center_y : sky-plane center (arcsec)
+    theta_E : Einstein radius. Unit: **arcsec**.
+    n : radial slope, dimensionless, ``n ∈ (1, 3)``.
+    center_x, center_y : sky-plane lens centre. Unit: **arcsec**.
     """
 
     def __init__(

@@ -9,10 +9,24 @@ curve, while the *minimal* parameterization ``(f_S, t_0, y_0, t_E)`` is not.
 We expose both:
 
 * :class:`PointMassMicrolens` keeps the physical parameters and computes
-  ``theta_E`` and ``t_E`` from astrophysical inputs - useful for forward
+  ``theta_E`` and ``t_E`` from astrophysical inputs — useful for forward
   modelling and didactic plots.
 
 * :class:`PaczynskiLightcurve` is the minimal model, the one to fit data with.
+
+Units used by this module
+-------------------------
+* ``f``        : arbitrary flux units (matches the data)
+* ``mass``     : solar masses (M_⊙)
+* ``y0``       : impact parameter, dimensionless (units of θ_E)
+* ``vel``      : km/s — *transverse relative* velocity in the lens plane
+* ``t0``       : days — peak-magnification time
+* ``dl, ds``   : kpc — angular-diameter distances (galactic micro: flat sky)
+* ``tE``       : days — Einstein crossing time
+* output ``θ_E`` (``einstein_radius``) : arcsec
+* output ``t_E`` (``einstein_time``)   : days
+
+Reference: Paczynski 1986; Meneghetti, *Lensing Gravitazionale* Ch. 4.
 """
 from __future__ import annotations
 

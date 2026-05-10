@@ -82,11 +82,21 @@ def fit_model(
     optimizer_cls: type = torch.optim.Adam,
     lr: float = 1e-3,
     epochs: int = 10,
-    device: str = "cpu",
+    device: Optional[str | torch.device] = None,
     metrics: Optional[Dict[str, Callable]] = None,
     log_every: int = 1,
 ) -> TrainHistory:
-    """Train ``model`` for ``epochs`` epochs and return its history."""
+    """Train ``model`` for ``epochs`` epochs and return its history.
+
+    ``device=None`` auto-detects the best available device (MPS → CUDA →
+    CPU) via :func:`lensing.config.get_device`. The model is moved to
+    that device on entry; the training-batch tensors are also moved to
+    the same device inside :func:`train_epoch`.
+    """
+    if device is None:
+        from ..config import get_device
+        device = get_device(None)
+    model = model.to(device)
     optimizer = optimizer_cls(model.parameters(), lr=lr)
     history = TrainHistory()
     history.metrics = {k: [] for k in (metrics or {})}

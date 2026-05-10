@@ -14,6 +14,53 @@ quantity, so a reader of the code knows where to look.
 > Wright & Brainerd (2000) *ApJ* (NFW); Refsdal (1964) *MNRAS* (time
 > delays); Tessore & Metcalf (2015) *A&A* (elliptical power-law).
 
+## 0. Conventions and units
+
+| Symbol               | Quantity                                          | Unit                            |
+|----------------------|---------------------------------------------------|---------------------------------|
+| `θ, β, α, x, y`      | angular position / deflection on the sky          | **arcsec**                      |
+| `ξ`                  | physical impact parameter on the lens plane       | **kpc**  (Mpc for clusters)     |
+| `D_L, D_S, D_LS`     | angular-diameter distances                        | **Mpc**                         |
+| `D_Δt`               | time-delay distance ``(1+z_L) D_L D_S / D_LS``    | **Mpc**                         |
+| `r_s`                | NFW scale radius (3-D)                            | **Mpc**                         |
+| `θ_s`                | NFW angular scale radius ``r_s / D_L``            | **arcsec**                      |
+| `θ_E`                | Einstein radius                                   | **arcsec**                      |
+| `σ_v`                | velocity dispersion of the lens galaxy            | **km/s**                        |
+| `M`                  | lens mass (microlensing)                          | **M_⊙** (solar masses)          |
+| `v_rel`              | lens-source relative transverse velocity (galactic micro) | **km/s**                |
+| `t, t_0, t_E`        | time axis, peak time, Einstein crossing time      | **days**                        |
+| `Δt`                 | time delay between images                         | **days** (s in raw API output)  |
+| `H_0`                | Hubble constant                                   | **km/s/Mpc**                    |
+| `Ψ`, `τ`             | lensing potential, Fermat potential               | **arcsec²**                     |
+| `κ, γ, μ`            | convergence, shear, magnification                 | **dimensionless**               |
+| `q`                  | axis ratio of an ellipsoidal lens / light model   | dimensionless ∈ (0, 1]          |
+| `e1, e2`             | ellipticity components, ``e = (1-q)/(1+q)``       | dimensionless                   |
+| `Σ_crit`             | critical surface density                          | M_⊙ / Mpc²                      |
+
+The package converts between unit systems explicitly inside
+`lensing.cosmology` (uses astropy under the hood) and exposes plain
+torch tensors with the units listed above; **no quantity has hidden
+units**. A formula in a docstring will state the units for both inputs
+and outputs.
+
+**Coordinate convention**: image-plane (x, y) and source-plane (β₁, β₂)
+are sky-aligned right-handed Cartesian coordinates; positive *x* is
+east, positive *y* is north. The function `gl.data.coordinate_grid`
+returns a `(2, npix, npix)` tensor with `xy[0]` the x-grid and `xy[1]`
+the y-grid — the convention used by every model's `forward(xy)`.
+
+**Sign convention**: deflection α is the *direction the source
+appears to move*, i.e. β = θ − α. Convergence is positive everywhere
+inside the lens (κ > 0). The shear sign in the SIE follows
+Kormann+1994 (γ₁ = −κ cos 2φ, γ₂ = −κ sin 2φ); some authors use the
+opposite sign for shear, so check before mixing with external code.
+
+**Cosmology**: a flat ΛCDM with H₀ = 70 km/s/Mpc, Ω_m = 0.3, Ω_b = 0.05
+is the default in `gl.cosmology.DEFAULT_COSMOLOGY`. All angular-
+diameter distances are obtained via `astropy.cosmology.FlatLambdaCDM`.
+
+---
+
 ## Outline (mirrors the Meneghetti lecture notes)
 
 | Chapter | Topic                                | Implementation                                                                |

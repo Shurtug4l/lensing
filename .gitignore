@@ -18,10 +18,13 @@ venv/
 .ruff_cache/
 
 # Generated artefacts (regenerable, can be large)
-notebooks/cache/        # HDF5 datasets (~80 MB) and posterior CSVs
-*.pt                    # model checkpoints
+# HDF5 datasets (~80 MB) and posterior CSVs live in notebooks/cache
+notebooks/cache/
+# model checkpoints
+*.pt
 *.pth
-*.h5                    # HDF5 anywhere
+# HDF5 anywhere
+*.h5
 
 # Data downloaded by lensing.archive (per-user cache)
 .cache/lensing_archive/

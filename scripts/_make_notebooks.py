@@ -68,7 +68,11 @@ HEADER_BOOTSTRAP = textwrap.dedent("""\
     import matplotlib.pyplot as plt
 
     import lensing as gl
-    device, dtype = gl.config.setup(seed=42, device="cpu")
+    # Device-agnostic: prefer MPS (Apple GPU) → CUDA → CPU.
+    # Pass device="cpu" if you need to force the CPU path (e.g. for
+    # operators that have no MPS kernel yet, or for reproducibility).
+    device, dtype = gl.config.setup(seed=42)
+    print(f"using device: {device}")
 """)
 
 
@@ -832,7 +836,10 @@ def notebook_cnn_classifier() -> List[dict]:
             model.eval()
             with torch.no_grad():
                 for x, y in test_loader:
-                    p = model(x).argmax(dim=-1)
+                    # `model` lives on `device` (MPS / CUDA / CPU); we must
+                    # move the test batch to the same device before the
+                    # forward pass — DataLoader returns CPU tensors by default.
+                    p = model(x.to(device)).argmax(dim=-1).cpu()
                     preds.extend(p.tolist()); labels.extend(y.tolist())
             preds = np.array(preds); labels = np.array(labels)
             cm = np.array([[((preds==i) & (labels==j)).sum() for j in (0,1)] for i in (0,1)])
@@ -883,7 +890,9 @@ def notebook_dnn_regression() -> List[dict]:
             model.eval()
             with torch.no_grad():
                 for x, y in DataLoader(test, batch_size=64):
-                    preds.append(model(x).numpy())
+                    # Move to the trained model's device, then back to CPU
+                    # for downstream NumPy / Matplotlib code.
+                    preds.append(model(x.to(device)).cpu().numpy())
                     truths.append(y.numpy())
             preds = np.vstack(preds); truths = np.vstack(truths)
 
@@ -906,7 +915,7 @@ def notebook_dnn_regression() -> List[dict]:
             x_one, y_true = test[0]
             t0 = time.perf_counter()
             with torch.no_grad():
-                y_dnn = model(x_one.unsqueeze(0))[0].numpy()
+                y_dnn = model(x_one.unsqueeze(0).to(device))[0].cpu().numpy()
             t_dnn = time.perf_counter() - t0
             print(f'DNN inference: {t_dnn*1e3:.2f} ms')
 
@@ -975,7 +984,7 @@ def notebook_unet() -> List[dict]:
             src = torch.stack([test[i][1] for i in range(8)])
             model.eval()
             with torch.no_grad():
-                pred = model(obs)
+                pred = model(obs.to(device)).cpu()
 
             fig, axes = plt.subplots(3, 8, figsize=(20, 8))
             for j in range(8):
@@ -1572,7 +1581,10 @@ def notebook_large_scale_finder() -> List[dict]:
             model.eval()
             with torch.no_grad():
                 for x, y in test_loader:
-                    out = model(x)
+                    # Move test batch to the device the model lives on
+                    # (MPS / CUDA / CPU) and pull the result back to CPU
+                    # for the NumPy/Matplotlib plotting code below.
+                    out = model(x.to(device)).cpu()
                     p = torch.softmax(out, dim=-1)
                     preds.extend(out.argmax(dim=-1).tolist())
                     probs.extend(p[:, 1].tolist())  # p(lens)
@@ -1703,7 +1715,7 @@ def notebook_param_recovery_at_scale() -> List[dict]:
             model.eval()
             with torch.no_grad():
                 for x, y in test_loader:
-                    preds.append(model(x).numpy())
+                    preds.append(model(x.to(device)).cpu().numpy())
                     truths.append(y.numpy())
             preds = np.vstack(preds); truths = np.vstack(truths)
 
@@ -1745,11 +1757,14 @@ def notebook_param_recovery_at_scale() -> List[dict]:
                                           deltapix=test_ds.meta['deltapix'])
             sigma_n = float(test_ds.meta['sigma'])
 
-            # DNN inference (one batch)
+            # DNN inference (one batch). Move both the input and the
+            # output across the device boundary because the trained
+            # `model` lives on `device` and downstream NumPy code
+            # expects CPU arrays.
             t0 = time.perf_counter()
             with torch.no_grad():
-                imgs = torch.stack([test_ds[i][0] for i in range(n_compare)])
-                pred_dnn = model(imgs).numpy()
+                imgs = torch.stack([test_ds[i][0] for i in range(n_compare)]).to(device)
+                pred_dnn = model(imgs).cpu().numpy()
             t_dnn = time.perf_counter() - t0
 
             # Adam fit (one image at a time) — short budget

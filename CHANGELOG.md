@@ -10,6 +10,37 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Detailed `docs/usage.md` covering every notebook (01–18) and script
   (`run_microlensing_fit.py`, `run_sersic_fit.py`, `_make_notebooks.py`).
+- **Section 0 "Conventions and units"** at the top of
+  `docs/background.md` — single source of truth for the unit system
+  (arcsec, Mpc, M_⊙, km/s, days), the coordinate convention, the
+  shear-sign convention, and the default cosmology.
+- Per-module unit tables in the docstrings of `cosmology`,
+  `microlens`, `sie`, `nfw`, `power_law` and `nie`.
+
+### Changed
+- **Default device is now ``None`` (auto-detect)** rather than
+  ``"cpu"`` — `gl.config.setup()` returns the best available
+  accelerator (MPS → CUDA → CPU). Pass ``device="cpu"`` explicitly to
+  force the CPU path.
+- :func:`lensing.ml.train.fit_model` moves the model and every batch
+  to the chosen device automatically; ML notebooks (10-12, 16-17) now
+  transparently train on MPS where available, with the inference cells
+  shuttling tensors back to CPU only for plotting.
+
+### Fixed
+- **NFW convergence at the scale radius** (`x = 1`): previously the
+  formula returned ~0 due to a 0/0 in `(1 - F(x))/(x² - 1)`; now the
+  analytic limit κ(1) = 2 κ_s / 3 (Wright & Brainerd 2000 Eq. 11
+  middle line) is used inside a small ε-ball.
+- **Binary-microlens magnification map**: the previous version
+  returned the *count* of image-plane rays per source-plane bin
+  (proportional to but not equal to μ); now it divides by the expected
+  unlensed count (= ``oversample²``) and oversamples the image plane
+  by 3× by default to suppress shot noise. The output is now a true
+  dimensionless μ field.
+- Noise functions, dataset / archive / LLM modules, and every package
+  `__init__.py` got proper module-level docstrings explaining the
+  *why* of each function and the units involved.
 
 ## [0.2.0] — 2024-Q4
 

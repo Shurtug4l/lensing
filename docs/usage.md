@@ -51,13 +51,46 @@ auto-detection.
 | Knob              | Where                                 | Effect                                           |
 |-------------------|---------------------------------------|--------------------------------------------------|
 | `seed`            | `gl.config.setup(seed=…)`             | Reproducibility for NumPy + torch RNGs           |
-| `device`          | `gl.config.setup(device=…)`           | "cpu" / "mps" / "cuda" / `None` (auto)           |
+| `device`          | `gl.config.setup(device=…)`           | "cpu" / "mps" / "cuda" / `None` (auto, default)  |
 | `npix, deltapix`  | `gl.data.coordinate_grid(...)`        | Image-plane grid size and pixel scale (arcsec)   |
-| `psf_fwhm`        | `gl.light.gaussian_psf_kernel(...)`   | PSF width                                        |
-| `noise_sigma`     | `gl.data.simulate_image(...)`         | Gaussian noise std                               |
+| `psf_fwhm`        | `gl.light.gaussian_psf_kernel(...)`   | PSF width (arcsec)                               |
+| `noise_sigma`     | `gl.data.simulate_image(...)`         | Gaussian noise std (flux units)                  |
 | `lr`, `epochs`    | `gl.inference.fit(...)`               | Adam learning rate, epoch budget                 |
 | `lbfgs_polish`    | `gl.inference.fit(...)`               | Append L-BFGS polish (recommended for fits)      |
 | `RUN_NUTS`        | inside posterior cells                | `False` → read cached CSV; `True` → resample     |
+
+### Device-agnostic by default
+
+Since v0.3 the bootstrap cell calls
+
+```python
+device, dtype = gl.config.setup(seed=42)   # device defaults to None
+```
+
+which **auto-detects the best available accelerator** (preference
+order: ``mps`` → ``cuda`` → ``cpu``). To force the CPU path (e.g. for
+operators with no MPS kernel yet, or for strict reproducibility),
+pass ``device="cpu"``. ML notebooks (10–12, 16–17) automatically move
+their model and batch tensors to the chosen device through
+:func:`lensing.ml.train.fit_model`.
+
+## Units and conventions (cheat-sheet)
+
+A single source of truth is `docs/background.md` (Sec. 0). The most
+important entries:
+
+| Symbol               | Unit                            |
+|----------------------|---------------------------------|
+| angles `θ, β, α`     | arcsec                          |
+| distances `D_*`      | Mpc                             |
+| velocity dispersion  | km/s                            |
+| time `t, t_E, Δt`    | days                            |
+| mass (microlensing)  | M_⊙ (solar masses)              |
+| `Ψ`, `τ`             | arcsec²                         |
+| `κ, γ, μ, q, e1, e2` | dimensionless                   |
+
+Sky-aligned right-handed Cartesian; positive `x` East, positive `y`
+North. Sign convention for the SIE shear is Kormann+1994.
 
 ---
 

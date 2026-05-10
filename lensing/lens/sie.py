@@ -3,10 +3,39 @@
 Replaces / cleans up the ``SieLens`` class scattered across
 ``2_sie/sielens.ipynb``, ``2_sie/inversion.ipynb``, ``2_sie/caustics.ipynb``.
 
-All quantities are expressed in dimensionless units of ``theta_E`` so the
-formulas are exactly those of Kormann, Schneider & Bartelmann (1994). When
-needed, ``theta_E`` is computed from the velocity dispersion via
-:func:`lensing.cosmology.Cosmology.einstein_radius_sie`.
+The closed-form deflection in lens-aligned polar coordinates is from
+Kormann, Schneider & Bartelmann 1994 (KSB94):
+
+.. math::
+   \\alpha_1(\\varphi) = \\frac{\\sqrt{q}}{q'}\\,
+       \\mathrm{asinh}\\Big(\\frac{q'}{q} \\cos\\varphi\\Big),
+   \\quad
+   \\alpha_2(\\varphi) = \\frac{\\sqrt{q}}{q'}\\,
+       \\arcsin\\big(q' \\sin\\varphi\\big),
+
+with ``q' = sqrt(1-q²)`` and ``φ`` the lens-aligned polar angle.
+
+The Einstein radius is defined via the velocity dispersion of the lens
+galaxy (Treu 2010 ARA&A Eq. 5):
+
+.. math::
+   \\theta_E = 4\\pi (\\sigma_v/c)^2\\, \\frac{D_{LS}}{D_S}\\quad [\\mathrm{rad}],
+
+then converted to arcsec.
+
+Units used by this module
+-------------------------
+* ``theta_E``     : arcsec
+* ``q``           : dimensionless, ∈ (0, 1]
+* ``pa``          : radians (lens major-axis position angle, CCW from +x)
+* ``center_x/y``  : arcsec (sky position of the lens center)
+* output ``α``    : arcsec
+* output ``κ, γ`` : dimensionless
+* output ``μ``    : dimensionless
+
+**Sign convention** (KSB94 Sec. 2): γ₁ = −κ cos 2φ, γ₂ = −κ sin 2φ.
+The opposite sign appears in some textbooks; do not mix conventions
+when comparing to external code.
 """
 from __future__ import annotations
 

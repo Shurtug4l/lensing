@@ -1,18 +1,30 @@
 """Navarro-Frenk-White (NFW) lens.
 
 The NFW profile (Navarro, Frenk & White 1997) describes the dark-matter
-density of a relaxed halo, and is the standard mass model for galaxy
+density of a relaxed halo and is the standard mass model for galaxy
 clusters in strong lensing. The 3D density is
 
-    rho(r) = rho_s / [ (r/r_s) (1 + r/r_s)^2 ]
+.. math::
+   \\rho(r) = \\frac{\\rho_s}{(r/r_s)(1 + r/r_s)^2}
+       \\qquad [\\rho]\\,= M_{\\odot}/\\mathrm{Mpc}^3,\\;
+       [r_s]\\,= \\mathrm{Mpc}.
 
 with characteristic density ``rho_s`` and scale radius ``r_s``. The
 projected (2D) convergence and deflection have closed-form expressions
-(Wright & Brainerd 2000) which we implement below in dimensionless
-form, then scale to arcsec with theta_s = r_s / D_L.
+(Wright & Brainerd 2000) which we implement below in dimensionless form
+``x = θ / θ_s`` and then scale to arcsec via ``θ_s = r_s / D_L`` (with
+``D_L`` the angular-diameter distance to the lens, in Mpc).
 
-This is the simplest cluster-scale lens model in the package. Used in
-notebook 09 (galaxy-cluster mass mapping).
+Units used by this module
+-------------------------
+* ``theta_s``       : arcsec  (lens-plane angular scale radius)
+* ``kappa_s``       : dimensionless characteristic convergence,
+                      ``= ρ_s r_s / Σ_crit``
+* ``center_x/y``    : arcsec  (sky position of the cluster center)
+* output ``alpha``  : arcsec  (deflection angle)
+* output ``kappa``  : dimensionless
+
+The model is used in notebook 09 (galaxy-cluster mass mapping).
 """
 from __future__ import annotations
 
@@ -73,9 +85,27 @@ class NFW(nn.Module):
         return torch.sqrt(dx * dx + dy * dy + 1e-12) / self.theta_s
 
     def kappa(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        """Convergence profile."""
+        """Convergence profile (dimensionless).
+
+        Wright & Brainerd 2000 Eq. 11 has three branches:
+
+        .. math::
+           \\kappa(x) = \\begin{cases}
+              2\\kappa_s\\,(1-F(x))/(x^2-1) & x \\ne 1, \\\\
+              \\frac{2}{3}\\,\\kappa_s & x = 1.
+           \\end{cases}
+
+        Both branches are continuous; the explicit ``x = 1`` value is
+        the analytic limit of the first expression and avoids a 0/0
+        round-off near the scale radius (which the regulariser
+        ``+ 1e-12`` alone would push to zero).
+        """
         xn = self._x(x, y)
-        return 2.0 * self.kappa_s * (1.0 - _F(xn)) / (xn ** 2 - 1.0 + 1e-12)
+        # Standard formula; tiny denominator regulariser to keep autograd happy.
+        general = 2.0 * self.kappa_s * (1.0 - _F(xn)) / (xn ** 2 - 1.0 + 1e-12)
+        # Analytic limit at x = 1 (Wright & Brainerd 2000 Eq. 11 middle line).
+        at_one = (2.0 / 3.0) * self.kappa_s * torch.ones_like(xn)
+        return torch.where(torch.abs(xn - 1.0) < 1e-3, at_one, general)
 
     def deflection(self, x: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Deflection angle in arcsec (Wright & Brainerd 2000 Eq. 11)."""

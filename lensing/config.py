@@ -77,11 +77,25 @@ def set_plot_style(use_tex: bool = False, dpi: int = 120) -> None:
 
 def setup(
     seed: Optional[int] = 42,
-    device: Optional[str] = "cpu",
+    device: Optional[str] = None,
     dtype: torch.dtype = DEFAULT_DTYPE,
     use_tex: bool = False,
 ) -> Tuple[torch.device, torch.dtype]:
-    """One-call bootstrap. Returns ``(device, dtype)``."""
+    """One-call bootstrap. Returns ``(device, dtype)``.
+
+    Parameters
+    ----------
+    seed : RNG seed for NumPy + PyTorch (None to skip).
+    device : ``"cpu"``, ``"mps"``, ``"cuda"`` or ``None`` for auto-detect
+        (which prefers ``mps`` → ``cuda`` → ``cpu``). The default of
+        ``None`` means **the toolkit picks the best available
+        accelerator** — pass ``"cpu"`` explicitly if you need to force
+        the CPU path (useful for unit tests or when a specific PyTorch
+        op does not have an MPS kernel yet).
+    dtype : default float dtype for newly-created tensors.
+    use_tex : if True, enable Matplotlib's TeX backend (slower but
+        produces paper-quality labels).
+    """
     if seed is not None:
         set_seed(seed)
     set_plot_style(use_tex=use_tex)

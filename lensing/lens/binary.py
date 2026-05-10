@@ -75,27 +75,59 @@ class BinaryPointMass(nn.Module):
         return x - ax, y - ay
 
     @torch.no_grad()
-    def magnification_map(self, npix: int = 401, halfwidth: float = 2.0) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return a magnification map by inverse-ray-tracing a regular grid.
+    def magnification_map(
+        self,
+        npix: int = 401,
+        halfwidth: float = 2.0,
+        oversample: int = 3,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        r"""Magnification map ``μ(β)`` by inverse ray-shooting.
 
-        This is the "ray-shooting" technique used in microlensing - we ray
-        trace many image-plane pixels back to the source plane, count how
-        many image-plane pixels land in each source-plane bin, and divide
-        by the no-lens count. The result is a 2D magnification field.
+        Method (Kayser, Refsdal & Stabell 1986; the canonical recipe in
+        microlensing): shoot a uniform grid of ``(npix·oversample)^2``
+        image-plane rays back to the source plane and count how many
+        rays land in each source-plane bin. Without a lens, the count
+        per source bin is ``oversample^2`` exactly (the image-plane
+        ray density is uniform and the lens equation is the identity);
+        with a lens the ratio of observed to unlensed count *is* the
+        magnification:
+
+        .. math::
+           \mu(\beta_i) =
+              \frac{N_{\rm rays}(\beta_i)}{\langle N_{\rm rays}\rangle_{\rm no\;lens}}.
+
+        Oversampling (default 3×) reduces the Poisson noise on the
+        ratio by a factor ``oversample``.
+
+        Units
+        -----
+        * ``halfwidth`` : units of θ_E (the **system** Einstein radius
+          for the binary as a whole).
+        * returned ``axis`` : same units (θ_E).
+        * returned ``mu`` : dimensionless; ``mu = 1`` outside caustics,
+          large (formally infinite on the critical curve).
         """
-        ax = torch.linspace(-halfwidth, halfwidth, npix)
-        x_im, y_im = torch.meshgrid(ax, ax, indexing="xy")
+        n_im = npix * oversample
+        ax_im = torch.linspace(-halfwidth, halfwidth, n_im)
+        x_im, y_im = torch.meshgrid(ax_im, ax_im, indexing="xy")
         bx, by = self.ray_trace(x_im.flatten(), y_im.flatten())
-        # Bin the source-plane positions on the same grid.
+
+        # Bin the source-plane positions on the requested resolution.
         bins = torch.linspace(-halfwidth, halfwidth, npix + 1)
         ix = torch.bucketize(bx, bins) - 1
         iy = torch.bucketize(by, bins) - 1
         valid = (ix >= 0) & (ix < npix) & (iy >= 0) & (iy < npix)
-        img = torch.zeros((npix, npix))
-        img.index_put_((iy[valid], ix[valid]), torch.ones(int(valid.sum())), accumulate=True)
-        # Reference: each source-plane pixel would receive 1 ray in the absence
-        # of lensing -> magnification = counts / 1.
-        return ax, img
+        counts = torch.zeros((npix, npix))
+        counts.index_put_(
+            (iy[valid], ix[valid]),
+            torch.ones(int(valid.sum())),
+            accumulate=True,
+        )
+        # Expected count per source bin without lensing = oversample**2.
+        unlensed_count = float(oversample) ** 2
+        # Centre-of-bin axis for plotting (instead of the bin edges).
+        axis = bins[:-1] + 0.5 * (bins[1] - bins[0])
+        return axis, counts / unlensed_count
 
     @torch.no_grad()
     def critical_curves(self, n: int = 1500, halfwidth: float = 2.0) -> Tuple[torch.Tensor, torch.Tensor]:

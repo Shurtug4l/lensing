@@ -1,8 +1,16 @@
 """Cosmological distance helpers wrapping astropy.
 
 The thesis SIE/microlensing notebooks called ``astropy.cosmology`` directly and
-juggled unit-stripping by hand.  This module exposes a thin wrapper that returns
-plain torch tensors in physical Mpc / kpc / km, consistent across the package.
+juggled unit-stripping by hand. This module exposes a thin wrapper that
+returns **plain torch tensors with explicit units**:
+
+* :meth:`Cosmology.angular_diameter_distance` — Mpc
+* :meth:`Cosmology.angular_diameter_distance_z1z2` — Mpc
+* :meth:`Cosmology.lens_distances` — ``(D_L, D_S, D_LS)`` in Mpc
+* :meth:`Cosmology.einstein_radius_sie` — arcsec
+
+The default cosmology is flat ΛCDM with H₀ = 70 km/s/Mpc, Ω_m = 0.3,
+Ω_b = 0.05 — see the units table at the top of ``docs/background.md``.
 """
 from __future__ import annotations
 
