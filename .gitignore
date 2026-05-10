@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Notebooks / Jupyter
+.ipynb_checkpoints/
+
+# Tooling caches
+.pytest_cache/
+.coverage
+.DS_Store
+.mypy_cache/
+.ruff_cache/
+
+# Generated artefacts (regenerable, can be large)
+notebooks/cache/        # HDF5 datasets (~80 MB) and posterior CSVs
+*.pt                    # model checkpoints
+*.pth
+*.h5                    # HDF5 anywhere
+
+# Data downloaded by lensing.archive (per-user cache)
+.cache/lensing_archive/
+
+# Large FITS files (>10MB) — see data/raw/README.md for download instructions
+data/raw/macs1206_stack.fits
+data/raw/RGB_macs1206.fits

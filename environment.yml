@@ -1,0 +1,20 @@
+name: lensing
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - matplotlib
+  - seaborn
+  - pandas
+  - astropy
+  - pytorch
+  - tqdm
+  - jupyter
+  - pip
+  - pip:
+      - pyro-ppl
+      - corner
+      - pytest

@@ -1,0 +1,11 @@
+numpy>=1.24
+scipy>=1.11
+matplotlib>=3.7
+seaborn>=0.13
+pandas>=2.0
+astropy>=5.3
+torch>=2.1
+pyro-ppl>=1.9
+corner>=2.2
+tqdm>=4.66
+pytest>=8.0

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lensing"
+version = "0.1.0"
+description = "PyTorch toolkit for parametric gravitational lensing - cleaned-up code from S. La Porta's MSc thesis"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "Simone La Porta"}]
+license = {text = "MIT"}
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "matplotlib>=3.7",
+    "seaborn>=0.13",
+    "pandas>=2.0",
+    "astropy>=5.3",
+    "torch>=2.1",
+    "pyro-ppl>=1.9",
+    "corner>=2.2",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[tool.setuptools]
+packages = ["lensing", "lensing.light", "lensing.lens",
+            "lensing.data", "lensing.inference",
+            "lensing.viz", "lensing.utils"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
