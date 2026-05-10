@@ -2,7 +2,7 @@
 
 A clean, reproducible Python package built around the code developed for the
 MSc thesis **["Applications of Automatic Differentiation in Gravitational
-Lensing"](../Applications-of-Automatic-Differentiation-in-Gravitational-Lensing-main/thesis.pdf)**
+Lensing"](https://github.com/Shurtug4l/Applications-of-Automatic-Differentiation-in-Gravitational-Lensing/blob/main/thesis.pdf)**
 (Simone La Porta, *Astrophysics & Cosmology*, Università di Bologna, 2024).
 
 The package consolidates the original notebooks (formerly `bad_lensing/`)
